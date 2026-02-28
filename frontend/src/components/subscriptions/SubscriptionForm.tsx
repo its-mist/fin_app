@@ -9,29 +9,28 @@ interface Props {
 }
 
 const PERIODS: { value: Period; label: string }[] = [
-  { value: 'weekly', label: 'Еженедельно' },
+  { value: 'weekly',  label: 'Еженедельно' },
   { value: 'monthly', label: 'Ежемесячно' },
-  { value: 'yearly', label: 'Ежегодно' },
+  { value: 'yearly',  label: 'Ежегодно' },
 ];
 
 const CATEGORIES = ['стриминг', 'ПО', 'музыка', 'облако', 'игры', 'прочее'];
 
-const CATEGORY_EMOJI: Record<string, string> = {
-  стриминг: '🎬',
-  музыка: '🎵',
-  ПО: '💻',
-  облако: '☁️',
-  игры: '🎮',
-  прочее: '📦',
-};
+function BackIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M15 18l-6-6 6-6" />
+    </svg>
+  );
+}
 
 export default function SubscriptionForm({ initial, onSubmit, onClose }: Props) {
-  const [name, setName] = useState(initial?.name ?? '');
-  const [amount, setAmount] = useState(initial?.amount.toString() ?? '');
-  const [period, setPeriod] = useState<Period>(initial?.period ?? 'monthly');
-  const [category, setCategory] = useState(initial?.category ?? 'прочее');
+  const [name,        setName]        = useState(initial?.name ?? '');
+  const [amount,      setAmount]      = useState(initial?.amount.toString() ?? '');
+  const [period,      setPeriod]      = useState<Period>(initial?.period ?? 'monthly');
+  const [category,    setCategory]    = useState(initial?.category ?? 'прочее');
   const [nextPayment, setNextPayment] = useState(initial?.next_payment ?? '');
-  const [loading, setLoading] = useState(false);
+  const [loading,     setLoading]     = useState(false);
   const { MainButton, BackButton, haptic, inTelegram } = useTelegram();
 
   const valid = name.trim() !== '' && Number(amount) > 0;
@@ -41,13 +40,7 @@ export default function SubscriptionForm({ initial, onSubmit, onClose }: Props) 
     if (!valid || loading) return;
     setLoading(true);
     try {
-      await onSubmit({
-        name: name.trim(),
-        amount: Number(amount),
-        period,
-        category,
-        next_payment: nextPayment || null,
-      });
+      await onSubmit({ name: name.trim(), amount: Number(amount), period, category, next_payment: nextPayment || null });
       haptic?.notificationOccurred('success');
       onClose();
     } catch {
@@ -56,10 +49,8 @@ export default function SubscriptionForm({ initial, onSubmit, onClose }: Props) 
     }
   };
 
-  // Keep handlerRef always pointing to the latest doSubmit
   useEffect(() => { handlerRef.current = doSubmit; });
 
-  // Register MainButton & BackButton once on mount
   useEffect(() => {
     if (!MainButton || !BackButton) return;
     const cb = () => handlerRef.current();
@@ -69,29 +60,22 @@ export default function SubscriptionForm({ initial, onSubmit, onClose }: Props) 
     BackButton.show();
     BackButton.onClick(onClose);
     return () => {
-      MainButton.offClick(cb);
-      MainButton.hide();
-      BackButton.offClick(onClose);
-      BackButton.hide();
+      MainButton.offClick(cb); MainButton.hide();
+      BackButton.offClick(onClose); BackButton.hide();
     };
   }, [MainButton, BackButton, onClose]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Enable/disable based on validity
   useEffect(() => {
     if (!MainButton) return;
-    if (valid) MainButton.enable();
-    else MainButton.disable();
+    valid ? MainButton.enable() : MainButton.disable();
   }, [valid, MainButton]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await doSubmit();
-  };
+  const handleSubmit = async (e: React.FormEvent) => { e.preventDefault(); await doSubmit(); };
 
   return (
     <div className="screen-form">
       <div className="screen-form-header">
-        <button className="back-btn" onClick={onClose}>‹</button>
+        <button className="back-btn" onClick={onClose}><BackIcon /></button>
         <span className="screen-form-title">{initial ? 'Редактировать' : 'Новая подписка'}</span>
       </div>
       <div className="screen-form-body">
@@ -99,64 +83,33 @@ export default function SubscriptionForm({ initial, onSubmit, onClose }: Props) 
           <div className="form-section">
             <div className="form-row">
               <label className="form-label">Название</label>
-              <input
-                className="form-input"
-                placeholder="Netflix, Яндекс.Плюс…"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                autoFocus
-              />
+              <input className="form-input" placeholder="Netflix, Яндекс.Плюс…" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
             </div>
             <div className="form-divider" />
             <div className="form-row">
               <label className="form-label">Сумма, ₽</label>
-              <input
-                className="form-input"
-                type="number"
-                placeholder="299"
-                min="0"
-                step="any"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
+              <input className="form-input" type="number" placeholder="299" min="0" step="any" value={amount} onChange={(e) => setAmount(e.target.value)} />
             </div>
           </div>
 
           <div className="form-section">
             <div className="form-row">
               <label className="form-label">Период</label>
-              <select
-                className="form-input"
-                value={period}
-                onChange={(e) => setPeriod(e.target.value as Period)}
-              >
-                {PERIODS.map((p) => (
-                  <option key={p.value} value={p.value}>{p.label}</option>
-                ))}
+              <select className="form-input" value={period} onChange={(e) => setPeriod(e.target.value as Period)}>
+                {PERIODS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
             </div>
             <div className="form-divider" />
             <div className="form-row">
               <label className="form-label">Категория</label>
-              <select
-                className="form-input"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-              >
-                {CATEGORIES.map((c) => (
-                  <option key={c} value={c}>{CATEGORY_EMOJI[c]} {c}</option>
-                ))}
+              <select className="form-input" value={category} onChange={(e) => setCategory(e.target.value)}>
+                {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div className="form-divider" />
             <div className="form-row">
               <label className="form-label">Следующий платёж</label>
-              <input
-                className="form-input"
-                type="date"
-                value={nextPayment}
-                onChange={(e) => setNextPayment(e.target.value)}
-              />
+              <input className="form-input" type="date" value={nextPayment} onChange={(e) => setNextPayment(e.target.value)} />
             </div>
           </div>
 
