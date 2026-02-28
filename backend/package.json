@@ -1,0 +1,15 @@
+{
+  "name": "fin-app-backend",
+  "version": "1.0.0",
+  "description": "Telegram Mini App - Finance tracker backend",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "node-sqlite3-wasm": "^0.8.53",
+    "cors": "^2.8.5",
+    "express": "^4.18.3"
+  }
+}

@@ -1,0 +1,8 @@
+**/node_modules
+frontend/dist
+backend/data/
+backend/data.db
+certbot/
+.git
+*.log
+.env

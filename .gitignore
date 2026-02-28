@@ -1,0 +1,25 @@
+# Dependencies
+**/node_modules/
+
+# Build output
+frontend/dist/
+
+# Database
+backend/data.db
+backend/data/
+
+# SSL & certbot (управляется на сервере, не хранится в репо)
+certbot/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local
+.env.production
+
+# OS
+.DS_Store
+Thumbs.db
