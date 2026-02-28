@@ -6,32 +6,46 @@ const PERIOD_LABELS: Record<string, string> = {
   yearly: 'ежегодно',
 };
 
+const CATEGORY_EMOJI: Record<string, string> = {
+  стриминг: '🎬',
+  музыка: '🎵',
+  ПО: '💻',
+  облако: '☁️',
+  игры: '🎮',
+  прочее: '📦',
+};
+
 interface Props {
   sub: Subscription;
+  isLast: boolean;
   onEdit: (sub: Subscription) => void;
   onDelete: (id: number) => void;
 }
 
-export default function SubscriptionItem({ sub, onEdit, onDelete }: Props) {
+export default function SubscriptionItem({ sub, isLast, onEdit, onDelete }: Props) {
   const nextDate = sub.next_payment
     ? new Date(sub.next_payment).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
     : null;
 
+  const emoji = CATEGORY_EMOJI[sub.category] ?? '📦';
+
   return (
-    <div className="card">
-      <div className="card-content">
-        <div className="card-title">{sub.name}</div>
-        <div className="card-sub">
-          {PERIOD_LABELS[sub.period] ?? sub.period}
-          {sub.category ? ` · ${sub.category}` : ''}
-          {nextDate ? ` · до ${nextDate}` : ''}
+    <>
+      <div className="tg-list-item">
+        <div className="list-item-icon">{emoji}</div>
+        <div className="list-item-content" onClick={() => onEdit(sub)}>
+          <div className="list-item-title">{sub.name}</div>
+          <div className="list-item-sub">
+            {PERIOD_LABELS[sub.period] ?? sub.period}
+            {nextDate ? ` · ${nextDate}` : ''}
+          </div>
+        </div>
+        <div className="list-item-amount">{sub.amount.toLocaleString('ru-RU')} ₽</div>
+        <div className="list-item-actions">
+          <button className="icon-btn" onClick={() => onDelete(sub.id)} title="Удалить">🗑️</button>
         </div>
       </div>
-      <div className="card-amount">{sub.amount.toLocaleString('ru-RU')} ₽</div>
-      <div className="card-actions">
-        <button className="icon-btn" onClick={() => onEdit(sub)} title="Редактировать">✏️</button>
-        <button className="icon-btn" onClick={() => onDelete(sub.id)} title="Удалить">🗑️</button>
-      </div>
-    </div>
+      {!isLast && <div className="list-divider" />}
+    </>
   );
 }

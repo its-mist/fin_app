@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import type { Subscription } from '../../types';
 import { getSubscriptions, createSubscription, updateSubscription, deleteSubscription } from '../../api';
 import SubscriptionItem from './SubscriptionItem';
 import SubscriptionForm from './SubscriptionForm';
+import { useTelegram } from '../../hooks/useTelegram';
 
 function toMonthly(amount: number, period: string): number {
   if (period === 'weekly') return (amount * 52) / 12;
@@ -10,11 +11,16 @@ function toMonthly(amount: number, period: string): number {
   return amount;
 }
 
-export default function SubscriptionsPage() {
+interface Props {
+  onFormToggle: (open: boolean) => void;
+}
+
+export default function SubscriptionsPage({ onFormToggle }: Props) {
   const [subs, setSubs] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Subscription | undefined>();
+  const { MainButton, inTelegram } = useTelegram();
 
   const load = async () => {
     try {
@@ -26,6 +32,31 @@ export default function SubscriptionsPage() {
 
   useEffect(() => { load(); }, []);
 
+  const openForm = useCallback((sub?: Subscription) => {
+    setEditing(sub);
+    setShowForm(true);
+    onFormToggle(true);
+  }, [onFormToggle]);
+
+  const closeForm = useCallback(() => {
+    setShowForm(false);
+    setEditing(undefined);
+    onFormToggle(false);
+  }, [onFormToggle]);
+
+  // MainButton: show "Add" when list is visible (not in form)
+  useEffect(() => {
+    if (!MainButton || showForm) return;
+    MainButton.setText('+ Добавить подписку');
+    MainButton.show();
+    const cb = () => openForm(undefined);
+    MainButton.onClick(cb);
+    return () => {
+      MainButton.offClick(cb);
+      MainButton.hide();
+    };
+  }, [MainButton, showForm, openForm]);
+
   const handleCreate = async (data: Omit<Subscription, 'id' | 'created_at'>) => {
     const created = await createSubscription(data);
     setSubs((prev) => [created, ...prev]);
@@ -35,7 +66,6 @@ export default function SubscriptionsPage() {
     if (!editing) return;
     const updated = await updateSubscription(editing.id, data);
     setSubs((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
-    setEditing(undefined);
   };
 
   const handleDelete = async (id: number) => {
@@ -50,9 +80,9 @@ export default function SubscriptionsPage() {
   return (
     <div className="page">
       {subs.length > 0 && (
-        <div className="total-bar">
-          <span className="total-bar-label">В месяц</span>
-          <span className="total-bar-amount">
+        <div className="summary-bar">
+          <span className="summary-bar-label">В месяц</span>
+          <span className="summary-bar-amount">
             {Math.round(monthlyTotal).toLocaleString('ru-RU')} ₽
           </span>
         </div>
@@ -61,31 +91,34 @@ export default function SubscriptionsPage() {
       {subs.length === 0 ? (
         <div className="empty">
           <div className="empty-icon">📋</div>
-          <div className="empty-text">Нет подписок. Нажмите + чтобы добавить.</div>
+          <div className="empty-text">Нет подписок</div>
         </div>
       ) : (
         <>
-          <div className="section-header">Все подписки</div>
-          {subs.map((s) => (
-            <SubscriptionItem
-              key={s.id}
-              sub={s}
-              onEdit={(sub) => { setEditing(sub); setShowForm(true); }}
-              onDelete={handleDelete}
-            />
-          ))}
+          <div className="section-title">Все подписки</div>
+          <div className="tg-list">
+            {subs.map((s, i) => (
+              <SubscriptionItem
+                key={s.id}
+                sub={s}
+                isLast={i === subs.length - 1}
+                onEdit={(sub) => openForm(sub)}
+                onDelete={handleDelete}
+              />
+            ))}
+          </div>
         </>
       )}
 
-      <button className="fab" onClick={() => { setEditing(undefined); setShowForm(true); }}>
-        +
-      </button>
+      {!inTelegram && (
+        <button className="fab" onClick={() => openForm(undefined)}>+</button>
+      )}
 
       {showForm && (
         <SubscriptionForm
           initial={editing}
           onSubmit={editing ? handleUpdate : handleCreate}
-          onClose={() => { setShowForm(false); setEditing(undefined); }}
+          onClose={closeForm}
         />
       )}
     </div>

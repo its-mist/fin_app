@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Debt, Direction } from '../../types';
+import { useTelegram } from '../../hooks/useTelegram';
 
 interface Props {
   initial?: Debt;
@@ -19,12 +20,13 @@ export default function DebtForm({ initial, onSubmit, onClose }: Props) {
   const [dueDate, setDueDate] = useState(initial?.due_date ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
   const [loading, setLoading] = useState(false);
+  const { MainButton, BackButton, haptic, inTelegram } = useTelegram();
 
-  const valid = person.trim() && Number(amount) > 0;
+  const valid = person.trim() !== '' && Number(amount) > 0;
+  const handlerRef = useRef<() => void>(() => {});
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!valid) return;
+  const doSubmit = async () => {
+    if (!valid || loading) return;
     setLoading(true);
     try {
       await onSubmit({
@@ -34,92 +36,120 @@ export default function DebtForm({ initial, onSubmit, onClose }: Props) {
         due_date: dueDate || null,
         description: description.trim() || null,
       });
+      haptic?.notificationOccurred('success');
       onClose();
-    } finally {
+    } catch {
+      haptic?.notificationOccurred('error');
       setLoading(false);
     }
   };
 
+  // Keep handlerRef always pointing to the latest doSubmit
+  useEffect(() => { handlerRef.current = doSubmit; });
+
+  // Register MainButton & BackButton once on mount
+  useEffect(() => {
+    if (!MainButton || !BackButton) return;
+    const cb = () => handlerRef.current();
+    MainButton.setText(initial ? 'Сохранить' : 'Добавить долг');
+    MainButton.show();
+    MainButton.onClick(cb);
+    BackButton.show();
+    BackButton.onClick(onClose);
+    return () => {
+      MainButton.offClick(cb);
+      MainButton.hide();
+      BackButton.offClick(onClose);
+      BackButton.hide();
+    };
+  }, [MainButton, BackButton, onClose]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Enable/disable based on validity
+  useEffect(() => {
+    if (!MainButton) return;
+    if (valid) MainButton.enable();
+    else MainButton.disable();
+  }, [valid, MainButton]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await doSubmit();
+  };
+
   return (
-    <div className="overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="sheet">
-        <div className="sheet-handle" />
-        <div className="sheet-title">{initial ? 'Редактировать' : 'Новый долг'}</div>
+    <div className="screen-form">
+      <div className="screen-form-header">
+        <button className="back-btn" onClick={onClose}>‹</button>
+        <span className="screen-form-title">{initial ? 'Редактировать' : 'Новый долг'}</span>
+      </div>
+      <div className="screen-form-body">
         <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>Направление</label>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {DIRECTIONS.map((d) => (
-                <button
-                  key={d.value}
-                  type="button"
-                  onClick={() => setDirection(d.value)}
-                  style={{
-                    flex: 1,
-                    padding: '10px',
-                    borderRadius: 12,
-                    fontSize: 14,
-                    fontWeight: 600,
-                    background: direction === d.value
-                      ? (d.value === 'i_owe' ? 'rgba(255,59,48,0.15)' : 'rgba(52,199,89,0.15)')
-                      : 'var(--tg-theme-secondary-bg-color)',
-                    color: direction === d.value
-                      ? (d.value === 'i_owe' ? '#ff3b30' : '#34c759')
-                      : 'var(--tg-theme-hint-color)',
-                    border: direction === d.value
-                      ? `1.5px solid ${d.value === 'i_owe' ? '#ff3b30' : '#34c759'}`
-                      : '1.5px solid transparent',
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  {d.label}
-                </button>
-              ))}
+          <div className="segment-control">
+            {DIRECTIONS.map((d) => (
+              <button
+                key={d.value}
+                type="button"
+                className={`segment-btn${direction === d.value ? ' active' : ''} ${d.value === 'i_owe' ? 'red' : 'green'}`}
+                onClick={() => setDirection(d.value)}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="form-section">
+            <div className="form-row">
+              <label className="form-label">Имя человека</label>
+              <input
+                className="form-input"
+                placeholder="Иван"
+                value={person}
+                onChange={(e) => setPerson(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="form-divider" />
+            <div className="form-row">
+              <label className="form-label">Сумма, ₽</label>
+              <input
+                className="form-input"
+                type="number"
+                placeholder="1000"
+                min="0"
+                step="any"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
             </div>
           </div>
-          <div className="form-group">
-            <label>Имя человека</label>
-            <input
-              className="form-control"
-              placeholder="Иван"
-              value={person}
-              onChange={(e) => setPerson(e.target.value)}
-              autoFocus
-            />
+
+          <div className="form-section">
+            <div className="form-row">
+              <label className="form-label">Срок (необязательно)</label>
+              <input
+                className="form-input"
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+              />
+            </div>
+            <div className="form-divider" />
+            <div className="form-row">
+              <label className="form-label">Примечание (необязательно)</label>
+              <input
+                className="form-input"
+                placeholder="За ужин, за поездку…"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </div>
           </div>
-          <div className="form-group">
-            <label>Сумма, ₽</label>
-            <input
-              className="form-control"
-              type="number"
-              placeholder="1000"
-              min="0"
-              step="any"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
-          </div>
-          <div className="form-group">
-            <label>Срок (необязательно)</label>
-            <input
-              className="form-control"
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-            />
-          </div>
-          <div className="form-group">
-            <label>Примечание (необязательно)</label>
-            <input
-              className="form-control"
-              placeholder="За ужин, за поездку…"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </div>
-          <button className="btn-primary" type="submit" disabled={!valid || loading}>
-            {loading ? 'Сохраняем…' : initial ? 'Сохранить' : 'Добавить'}
-          </button>
+
+          {!inTelegram && (
+            <button className="btn-submit" type="submit" disabled={!valid || loading}>
+              {loading ? 'Сохраняем…' : initial ? 'Сохранить' : 'Добавить'}
+            </button>
+          )}
         </form>
       </div>
     </div>

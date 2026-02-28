@@ -1,14 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import type { Debt } from '../../types';
 import { getDebts, createDebt, updateDebt, deleteDebt } from '../../api';
 import DebtItem from './DebtItem';
 import DebtForm from './DebtForm';
+import { useTelegram } from '../../hooks/useTelegram';
 
-export default function DebtsPage() {
+interface Props {
+  onFormToggle: (open: boolean) => void;
+}
+
+export default function DebtsPage({ onFormToggle }: Props) {
   const [debts, setDebts] = useState<Debt[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Debt | undefined>();
+  const { MainButton, inTelegram } = useTelegram();
 
   const load = async () => {
     try {
@@ -20,6 +26,31 @@ export default function DebtsPage() {
 
   useEffect(() => { load(); }, []);
 
+  const openForm = useCallback((debt?: Debt) => {
+    setEditing(debt);
+    setShowForm(true);
+    onFormToggle(true);
+  }, [onFormToggle]);
+
+  const closeForm = useCallback(() => {
+    setShowForm(false);
+    setEditing(undefined);
+    onFormToggle(false);
+  }, [onFormToggle]);
+
+  // MainButton: show "Add" when list is visible (not in form)
+  useEffect(() => {
+    if (!MainButton || showForm) return;
+    MainButton.setText('+ Добавить долг');
+    MainButton.show();
+    const cb = () => openForm(undefined);
+    MainButton.onClick(cb);
+    return () => {
+      MainButton.offClick(cb);
+      MainButton.hide();
+    };
+  }, [MainButton, showForm, openForm]);
+
   const handleCreate = async (data: Omit<Debt, 'id' | 'created_at'>) => {
     const created = await createDebt(data);
     setDebts((prev) => [created, ...prev]);
@@ -29,7 +60,6 @@ export default function DebtsPage() {
     if (!editing) return;
     const updated = await updateDebt(editing.id, data);
     setDebts((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
-    setEditing(undefined);
   };
 
   const handleDelete = async (id: number) => {
@@ -39,7 +69,6 @@ export default function DebtsPage() {
 
   const theyOwe = debts.filter((d) => d.direction === 'they_owe');
   const iOwe = debts.filter((d) => d.direction === 'i_owe');
-
   const theyOweTotal = theyOwe.reduce((a, d) => a + d.amount, 0);
   const iOweTotal = iOwe.reduce((a, d) => a + d.amount, 0);
 
@@ -48,22 +77,14 @@ export default function DebtsPage() {
   return (
     <div className="page">
       {debts.length > 0 && (
-        <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
-          <div style={{
-            flex: 1, background: 'rgba(52,199,89,0.12)', borderRadius: 14, padding: '12px 16px',
-          }}>
-            <div style={{ fontSize: 12, color: '#34c759', fontWeight: 600, marginBottom: 4 }}>МНЕ ДОЛЖНЫ</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#34c759' }}>
-              {theyOweTotal.toLocaleString('ru-RU')} ₽
-            </div>
+        <div className="summary-row">
+          <div className="summary-card summary-card-green">
+            <div className="summary-card-label">МНЕ ДОЛЖНЫ</div>
+            <div className="summary-card-amount">{theyOweTotal.toLocaleString('ru-RU')} ₽</div>
           </div>
-          <div style={{
-            flex: 1, background: 'rgba(255,59,48,0.10)', borderRadius: 14, padding: '12px 16px',
-          }}>
-            <div style={{ fontSize: 12, color: '#ff3b30', fontWeight: 600, marginBottom: 4 }}>Я ДОЛЖЕН</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#ff3b30' }}>
-              {iOweTotal.toLocaleString('ru-RU')} ₽
-            </div>
+          <div className="summary-card summary-card-red">
+            <div className="summary-card-label">Я ДОЛЖЕН</div>
+            <div className="summary-card-amount">{iOweTotal.toLocaleString('ru-RU')} ₽</div>
           </div>
         </div>
       )}
@@ -71,48 +92,54 @@ export default function DebtsPage() {
       {debts.length === 0 ? (
         <div className="empty">
           <div className="empty-icon">🤝</div>
-          <div className="empty-text">Нет долгов. Нажмите + чтобы добавить.</div>
+          <div className="empty-text">Нет долгов</div>
         </div>
       ) : (
         <>
           {theyOwe.length > 0 && (
             <>
-              <div className="section-header">Мне должны</div>
-              {theyOwe.map((d) => (
-                <DebtItem
-                  key={d.id}
-                  debt={d}
-                  onEdit={(debt) => { setEditing(debt); setShowForm(true); }}
-                  onDelete={handleDelete}
-                />
-              ))}
+              <div className="section-title">Мне должны</div>
+              <div className="tg-list">
+                {theyOwe.map((d, i) => (
+                  <DebtItem
+                    key={d.id}
+                    debt={d}
+                    isLast={i === theyOwe.length - 1}
+                    onEdit={(debt) => openForm(debt)}
+                    onDelete={handleDelete}
+                  />
+                ))}
+              </div>
             </>
           )}
           {iOwe.length > 0 && (
             <>
-              <div className="section-header">Я должен</div>
-              {iOwe.map((d) => (
-                <DebtItem
-                  key={d.id}
-                  debt={d}
-                  onEdit={(debt) => { setEditing(debt); setShowForm(true); }}
-                  onDelete={handleDelete}
-                />
-              ))}
+              <div className="section-title">Я должен</div>
+              <div className="tg-list">
+                {iOwe.map((d, i) => (
+                  <DebtItem
+                    key={d.id}
+                    debt={d}
+                    isLast={i === iOwe.length - 1}
+                    onEdit={(debt) => openForm(debt)}
+                    onDelete={handleDelete}
+                  />
+                ))}
+              </div>
             </>
           )}
         </>
       )}
 
-      <button className="fab" onClick={() => { setEditing(undefined); setShowForm(true); }}>
-        +
-      </button>
+      {!inTelegram && (
+        <button className="fab" onClick={() => openForm(undefined)}>+</button>
+      )}
 
       {showForm && (
         <DebtForm
           initial={editing}
           onSubmit={editing ? handleUpdate : handleCreate}
-          onClose={() => { setShowForm(false); setEditing(undefined); }}
+          onClose={closeForm}
         />
       )}
     </div>
