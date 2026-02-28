@@ -6,6 +6,9 @@ set -e
 echo "==> Получаем последние изменения..."
 git pull
 
+echo "==> Останавливаем backend..."
+docker compose stop backend
+
 echo "==> Пересобираем и перезапускаем контейнеры..."
 docker compose up -d --build nginx backend
 
